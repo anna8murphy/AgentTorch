@@ -3,10 +3,10 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import re
 import pickle
+import json
 from constants import STATE_DICT, API_KEY, AGE_PATTERNS
 
-def fetch_census_variables():
-    url = "https://api.census.gov/data/2023/acs/acs1/variables.html"
+def fetch_url(url):
     response = requests.get(url)
     response.raise_for_status()
     return response.text
@@ -47,19 +47,18 @@ def get_ethnicity_labels():
     }
     return list(variable_labels.keys()), variable_labels
 
-def fetch_census_data(variables, state):
-    base_url = "https://api.census.gov/data/2023/acs/acs1"
+def fetch_census_data(variables, zcta):
+    base_url = "https://api.census.gov/data/2022/acs/acs5"
     
     get_variables = "NAME," + ",".join(variables)
     
     params = {
         "get": get_variables,
-        "for": f"state:{state}",
+        "for": f"zip code tabulation area:{zcta}",
         "key": API_KEY
     }
     
     response = requests.get(base_url, params=params)
-    # print(response.url)
     response.raise_for_status()
     return response.json()
 
@@ -108,7 +107,7 @@ def process_age_gender_data(data, variable_labels, state_abbr):
 
 def process_ethnicity_data(data, labels, state_abbr):
     df = pd.DataFrame(data[1:], columns=data[0])
-    id_vars = ['NAME', 'state']
+    id_vars = ['NAME', 'zip code tabulation area']
     value_vars = list(labels.keys())
     melted_df = df.melt(id_vars=id_vars, value_vars=value_vars, var_name='variable', value_name='count')
     
@@ -122,21 +121,34 @@ def process_ethnicity_data(data, labels, state_abbr):
     
     return result_df
 
+def get_state_zctas(state):
+    zcta_url = "https://api.census.gov/data/2017/acs/acs5?get=NAME,group(B19013)&for=zip%20code%20tabulation%20area:*" # get all zctas
+    zcta_response = fetch_url(zcta_url)
+    split_response = zcta_response.split('],')
+
+    state_zctas = [line.split(',')[-1][1:-1] for line in split_response[1:] if line.split(',')[-2] == f'"{state}"']
+    return state_zctas
+
+
 def main():
+    state = "36"
+    state_abbr = "NY"
 
-    try:
-        # get census variables
-        html_content = fetch_census_variables()
-        age_gender_vars, age_gender_labels = get_age_gender_labels(html_content)
-        ethnicity_vars, ethnicity_labels = get_ethnicity_labels()
+    # get zctas
+    state_zctas = get_state_zctas(state)
+    
+    # get census variables
+    census_vars_url = "https://api.census.gov/data/2023/acs/acs1/variables.html"
+    html_content = fetch_url(census_vars_url)
+    age_gender_vars, age_gender_labels = get_age_gender_labels(html_content)
+    ethnicity_vars, ethnicity_labels = get_ethnicity_labels()
 
-        for state in STATE_DICT:
-            s = str(state)
-            state_abbr = STATE_DICT[state][1]
+    for zcta in state_zctas:
 
+        try:
             # fetch data using api
-            age_gender_data = fetch_census_data(age_gender_vars, s)
-            ethnicity_data = fetch_census_data(ethnicity_vars, s)
+            age_gender_data = fetch_census_data(age_gender_vars, zcta)
+            ethnicity_data = fetch_census_data(ethnicity_vars, zcta)
 
             # create dataframes
             age_gender_df = process_age_gender_data(age_gender_data, age_gender_labels, state_abbr)
@@ -149,16 +161,18 @@ def main():
             }
 
             # store age and gender data, used in household.py
-            filename = 'data/age_gender/' + state_abbr + '_age_gender.csv'
+            filename = 'data/age_gender/' + state_abbr + zcta + '_age_gender.csv'
             age_gender_df.to_csv(filename, index=False)
 
             # write combined population data to pickle   
-            filename = 'data/population/' + state_abbr + '_population_data.pkl'
+            filename = 'data/population/' + state_abbr + zcta + '_population_data.pkl'
             with open(filename, 'wb') as file:
                 pickle.dump(population_data, file)
-
-    except Exception as e:
-        print(f"An error occurred: {e}")
+            print("saved data for zcta", zcta)
+            
+        except:
+            print("error processing zcta", zcta)
+            continue
 
 if __name__ == "__main__":
     main()

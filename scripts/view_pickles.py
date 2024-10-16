@@ -36,11 +36,6 @@ def convert_pkl_to_csv(pkl_file, csv_file):
     except Exception as e:
         print(f"Error converting pickle to CSV: {e}")
 
-# Example usage
-# pkl_file = "NY_base_population.pkl"
-# csv_file = "NY_base_population.csv"
-# convert_pkl_to_csv(pkl_file, csv_file)
-
 # print last 10 rows of csv
 def print_first_rows(csv_file, num_rows=10):
     try:
@@ -53,13 +48,9 @@ def print_first_rows(csv_file, num_rows=10):
     except Exception as e:
         print(f"Error printing first rows of CSV: {e}")
 
-# view_pickle("pickles/NY_population_data.pkl")
-# view_pickle("pickles/NY_household.pkl")
-
-view_pickle("output/UT_base_population.pkl")
-
-# csv_file = "NY_base_population.csv"
-# print_first_rows(csv_file, num_rows=100)
+# view_pickle("data/population/NY10504_population_data.pkl")
+# view_pickle("output/NY10504_household.pkl")
+# view_pickle("data/household/NY06390_household.pkl")
 
 
 
