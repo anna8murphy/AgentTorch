@@ -48,7 +48,7 @@ def print_first_rows(csv_file, num_rows=10):
     except Exception as e:
         print(f"Error printing first rows of CSV: {e}")
 
-# view_pickle("data/population/NY10504_population_data.pkl")
+view_pickle("data/population/NY001_population_data.pkl")
 # view_pickle("output/NY10504_household.pkl")
 # view_pickle("data/household/NY06390_household.pkl")
 
