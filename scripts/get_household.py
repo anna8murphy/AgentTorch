@@ -1,10 +1,18 @@
-import requests
-import pandas as pd
-from constants import API_KEY, STATE_DICT, AGE_GROUP_MAPPING
-from get_population import fetch_census_data, get_state_zctas
 import pickle
 
+import pandas as pd
+import requests
+
+from constants import API_KEY, STATE_DICT, AGE_GROUP_MAPPING
+from get_population import fetch_census_data, get_counties, create_state_dirs
+
 def get_household_labels():
+    """
+    Returns the variable keys and labels for household-related census data.
+    
+    Returns:
+        tuple: A list of household variable keys and a dictionary mapping variables to descriptive labels.
+    """
     variable_labels = {
         "B11001_001E": "Households",
         "B11001_002E": "Family Households",
@@ -14,56 +22,73 @@ def get_household_labels():
 
     return list(variable_labels.keys()), variable_labels
 
-def process_household_data(data, labels, state_abbr, zcta):
+def process_household_data(data, labels, state_abbr, county):
+    """
+    Processes household census data and combines it with demographic (age/gender) data.
+
+    Args:
+        data (list): The household data fetched from the census API.
+        labels (dict): A dictionary mapping variable names to their labels.
+        state_abbr (str): The state abbreviation.
+        county (str): The county code.
+    
+    Returns:
+        pd.DataFrame: A DataFrame containing household statistics and the number of children and adults.
+    """
     df = pd.DataFrame(data[1:], columns=data[0])
     area = state_abbr + '0001'
     
-    household_data = {
+    h_data = {
         'area': area,
     }
     
     for variable, label in labels.items():
         value = float(df.loc[0, variable])
         if label == 'Households':
-            household_data['household_num'] = int(value)
+            h_data['household_num'] = int(value)
         elif label == 'Family Households':
-            household_data['family_households'] = int(value)
+            h_data['family_households'] = int(value)
         elif label == 'Nonfamily Households':
-            household_data['nonfamily_households'] = int(value)
+            h_data['nonfamily_households'] = int(value)
         elif label == 'Average Household Size':
-            household_data['average_household_size'] = value
+            h_data['average_household_size'] = value
     
-    age_gender_df = pd.read_csv('data/age_gender/' + state_abbr + zcta + '_age_gender.csv')
-    # household_data['people_num'] = age_gender_df['count'].sum()
-    # household_data['children_num'] = age_gender_df[age_gender_df['age'] == 'U5']['count'].sum()
-    household_data['children_num'] = age_gender_df[age_gender_df['age'].isin(AGE_GROUP_MAPPING['children_list'])]['count'].sum()
-    household_data['people_num'] = age_gender_df[age_gender_df['age'].isin(AGE_GROUP_MAPPING['adult_list'])]['count'].sum()
+    age_gender_df = pd.read_csv(f'data/age_gender/{state_abbr}/{county}_age_gender.csv')
+   
+    h_data['children_num'] = age_gender_df[age_gender_df['age'].isin(AGE_GROUP_MAPPING['children_list'])]['count'].sum()
+    h_data['people_num'] = age_gender_df[age_gender_df['age'].isin(AGE_GROUP_MAPPING['adult_list'])]['count'].sum()
     
-    result_df = pd.DataFrame([household_data])
+    result_df = pd.DataFrame([h_data])
     
     return result_df
 
 def main():
+
+    # create_state_dirs("household")
+
     # get household labels and data
     variables, variable_labels = get_household_labels()
 
-    # get state zctas
-    state = "36"
-    state_abbr = "NY"
-    state_zctas = get_state_zctas(state)
+    for state_fips in STATE_DICT:
+        
+        counties = get_counties(state_fips)
+        state_abbr = STATE_DICT[state_fips][1]
 
-    for zcta in state_zctas:
-        try:
-            data = fetch_census_data(variables, zcta)
+        for county in counties:
+            try:
+                data = fetch_census_data(variables, state_fips, county)
 
-            # get df
-            household_df = process_household_data(data, variable_labels, state_abbr, zcta)
+                # get df
+                h_df = process_household_data(data, variable_labels, state_abbr, county)
 
-            # save
-            household_df.to_pickle('data/household/' + state_abbr + zcta + '_household.pkl')
+                # save
+                h_df.to_pickle('data/household/' + state_abbr + "/" + county + '_household.pkl')
 
-        except:
-            continue
+            except:
+                print("failed")
+                continue
+        
+        print("state", state_abbr, "finished")
     
 if __name__ == "__main__":
     main()

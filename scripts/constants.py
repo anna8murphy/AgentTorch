@@ -1,7 +1,19 @@
 API_KEY = "a77a95770c765160cab9847418d50e77a2f50f0d"
 
+CENSUS_API_URL = "https://api.census.gov/data/2022/acs/acs5"
+CENSUS_VARIABLES_URL = "https://api.census.gov/data/2023/acs/acs1/variables.html"
+
 POPULATION_DATA_PATH = "data/population/"
 HOUSEHOLD_DATA_PATH = "data/household/"
+
+AGE_GROUP_MAPPING = {
+    "adult_list": [
+        "20t21", "22t24", "25t29", "30t34", "35t39", "40t44", "45t49", 
+        "50t54", "55t59", "60t61", "62t64", "65t66", "67t69", "70t74", 
+        "75t79", "80t84", "85plus"
+    ],
+    "children_list": ["U5", "5t9", "10t14", "15t17", "18t19"]
+}
 
 AGE_PATTERNS = [
         (r'Under 5 years', 'U5'),
@@ -28,11 +40,6 @@ AGE_PATTERNS = [
         (r'80 to 84 years', '80t84'),
         (r'85 years and over', '85plus')
     ]
-
-AGE_GROUP_MAPPING = {
-    "adult_list": ["20t21", "22t24", "25t29", "30t34", "35t39", "40t44", "45t49", "50t54", "55t59", "60t61", "62t64", "65t66", "67t69", "70t74", "75t79", "80t84", "85plus"],
-    "children_list": ["U5", "5t9", "10t14", "15t17", "18t19"],
-}
 
 STATE_DICT = {
     "01": ("Alabama", "AL"),
