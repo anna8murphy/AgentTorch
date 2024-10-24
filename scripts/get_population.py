@@ -3,11 +3,79 @@ import os
 import pickle
 import re
 
+from enum import Enum
+from dataclasses import dataclass
+from typing import List, Dict, Optional, Tuple
+
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
-
 from constants import STATE_DICT, API_KEY, AGE_PATTERNS, CENSUS_API_URL, CENSUS_VARIABLES_URL
+
+class GeographyType(Enum):
+    COUNTY = "county"
+    ZCTA = "zip code tabulation area"
+
+@dataclass
+class GeographyConfig:
+    type: GeographyType
+    fips: str
+    state_abbr: str
+
+class CensusGeographyHandler:
+    def __init__(self, api_key: str, base_url: str):
+        self.api_key = api_key
+        self.base_url = base_url
+    
+    def fetch_geography_units(self, config: GeographyConfig) -> List[str]:
+        """Fetch all geographic units (counties or ZCTAs) for a state"""
+        if config.type == GeographyType.ZCTA:
+            return get_zctas(config.fips)
+        
+        params = {
+            "get": "NAME",
+            "for": f"{config.type.value}:*",
+            "in": f"state:{config.fips}",
+            "key": self.api_key
+        }
+        
+        response = requests.get(self.base_url, params=params)
+        response.raise_for_status()
+        data = response.json()
+        
+        return [row[2] for row in data[1:]]
+    
+    def fetch_census_data(self, 
+                         variables: List[str], 
+                         config: GeographyConfig, 
+                         geo_unit: str) -> Dict:
+        """Fetch census data for a specific geographic unit"""
+        params = {
+            "get": "NAME," + ",".join(variables),
+            "for": f"{config.type.value}:{geo_unit}",
+            "in": f"state:{config.fips}",
+            "key": self.api_key
+        }
+        
+        response = requests.get(self.base_url, params=params)
+        response.raise_for_status()
+        return response.json()
+    
+    def save_data(self, 
+                  data: Dict, 
+                  config: GeographyConfig, 
+                  geo_unit: str, 
+                  data_type: str):
+        """Save processed data to appropriate location"""
+        base_path = f"data/{data_type}/{config.state_abbr}"
+        os.makedirs(base_path, exist_ok=True)
+        
+        filename = f"{base_path}/{geo_unit}_{data_type}"
+        if isinstance(data, pd.DataFrame):
+            data.to_csv(f"{filename}.csv", index=False)
+        else:
+            with open(f"{filename}.pkl", 'wb') as f:
+                pickle.dump(data, f)
 
 def fetch_url(url):
     """
@@ -76,34 +144,6 @@ def get_ethnicity_labels():
         "B02001_008E": "Two or More Races"
     }
     return list(variable_labels.keys()), variable_labels
-
-def fetch_census_data(variables, state, county):
-    """
-    Fetches county-level census data for a specific state and county from 2022 5-Year ACS.
-
-    Args:
-        variables (list): A list of variable names to fetch.
-        state (str): The state FIPS code.
-        county (str): The county FIPS code.
-
-    Returns:
-        list: A JSON response containing the census data for the specified variables, state, and county.
-
-    Raises:
-        HTTPError: If the request to the API fails.
-    """    
-    get_variables = "NAME," + ",".join(variables)
-    
-    params = {
-        "get": get_variables,
-        "for": f"county:{county}",
-        "in": f"state:{state}",
-        "key": API_KEY
-    }
-
-    response = requests.get(CENSUS_API_URL, params=params)
-    response.raise_for_status()
-    return response.json()
 
 def parse_label(label):
     """
@@ -212,7 +252,7 @@ def get_zctas(state_fips):
     zcta_response = fetch_url(zcta_url)
     split_response = zcta_response.split('],')
 
-    state_zctas = [line.split(',')[-1][1:-1] for line in split_response[1:] if line.split(',')[-2] == f'"{state}"']
+    state_zctas = [line.split(',')[-1][1:-1] for line in split_response[1:] if line.split(',')[-2] == f'"{state_fips}"']
     return state_zctas
     
 def process_ethnicity_data(data, labels, state_abbr):
@@ -242,77 +282,53 @@ def process_ethnicity_data(data, labels, state_abbr):
     
     return result_df
 
-def create_state_dirs(path):
-    """
-    Creates directories for each state based on the state name from the STATE_DICT.
-
-    Args:
-        path (str): The base directory where state directories should be created.
-
-    Returns:
-        None
-    """
-    for name in STATE_DICT:
-
-        name = STATE_DICT[name][1]
-        try:
-            a = f'data/{path}/' + name
-            os.mkdir(a)
-
-            print(f"Directory {name} created successfully")
-
-        except FileExistsError:
-            print(f"Directory {name} already exists")
-
-
 def main():
-
-    loc_id = "county"
-
-    # get all census variables
+    handler = CensusGeographyHandler(API_KEY, CENSUS_API_URL)
+    
+    geography_type = GeographyType.ZCTA 
+    
     html_content = fetch_url(CENSUS_VARIABLES_URL)
     ag_vars, ag_labels = get_age_gender_labels(html_content)
     e_vars, e_labels = get_ethnicity_labels()
-
-    # for each state
-    for state_fips in STATE_DICT:
+    
+    for state_fips, (state_name, state_abbr) in STATE_DICT.items():
+        # Create config
+        config = GeographyConfig(
+            type=geography_type,
+            fips=state_fips,
+            state_abbr=state_abbr
+        )
         
-        counties = get_counties(state_fips)
-        state_abbr = STATE_DICT[state_fips][1]
-
-        for county in counties:
-
+        # Get all geographic units for the state
+        geo_units = handler.fetch_geography_units(config)
+        
+        for geo_unit in geo_units:
             try:
-                # fetch data using api
-                ag_data = fetch_census_data(ag_vars, state_fips, county)
-                e_data = fetch_census_data(e_vars, state_fips, county)
-
-                # create dataframes
+                # Fetch data
+                ag_data = handler.fetch_census_data(ag_vars, config, geo_unit)
+                e_data = handler.fetch_census_data(e_vars, config, geo_unit)
+                
+                # Process data
                 ag_df = process_age_gender_data(ag_data, ag_labels, state_abbr)
                 e_df = process_ethnicity_data(e_data, e_labels, state_abbr)
-
-                # create dict of dataframes
+                
+                # Combine data
                 pop_data = {
-                'age_gender': ag_df,
-                'ethnicity': e_df
+                    'age_gender': ag_df,
+                    'ethnicity': e_df
                 }
-
-                # store age and gender data, used in household.py
-                ag_filename = f"data/age_gender/{state_abbr}/{county}_age_gender.csv"
-                ag_df.to_csv(ag_filename, index=False)
-
-                # write combined population data to pickle   
-                pop_filename = f"data/population/{state_abbr}/{county}_population.pkl"
-
-                with open(pop_filename, 'wb') as file:
-                    pickle.dump(pop_data, file)
-
-                print("saved data for county", county)
-
-            except:
-                print("error processing county", county)
-
-        print("state", state_abbr, "finished")
+                
+                # Save data
+                geo_path = geo_unit + "data"
+                handler.save_data(ag_df, config, geo_path, 'age_gender')
+                handler.save_data(pop_data, config, geo_path, 'population')
+                
+                print(f"Saved data for {config.type.value} {geo_unit}")
+                
+            except Exception as e:
+                print(f"Error processing {config.type.value} {geo_unit}: {str(e)}")
+        
+        print(f"State {state_abbr} finished")
 
 if __name__ == "__main__":
     main()
