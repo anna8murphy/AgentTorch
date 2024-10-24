@@ -197,7 +197,24 @@ def get_counties(state_fips):
 
     return counties
 
+def get_zctas(state_fips):
+    """
+    Fetches Zip Code Tabulation Areas (ZCTAs) for a specified state using the Census API.
 
+    Args:
+        state_fips (str): The Federal Information Processing Standards (FIPS) code for the state 
+                          whose ZCTAs are to be retrieved.
+
+    Returns:
+        list: A list of ZCTAs (as strings) corresponding to the specified state.
+    """
+    zcta_url = "https://api.census.gov/data/2017/acs/acs5?get=NAME,group(B19013)&for=zip%20code%20tabulation%20area:*" # get all zctas
+    zcta_response = fetch_url(zcta_url)
+    split_response = zcta_response.split('],')
+
+    state_zctas = [line.split(',')[-1][1:-1] for line in split_response[1:] if line.split(',')[-2] == f'"{state}"']
+    return state_zctas
+    
 def process_ethnicity_data(data, labels, state_abbr):
     """
     Processes ethnicity census data and transforms it into a structured DataFrame.
@@ -249,6 +266,8 @@ def create_state_dirs(path):
 
 
 def main():
+
+    loc_id = "county"
 
     # get all census variables
     html_content = fetch_url(CENSUS_VARIABLES_URL)
