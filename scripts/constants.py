@@ -3,8 +3,8 @@ API_KEY = "a77a95770c765160cab9847418d50e77a2f50f0d"
 CENSUS_API_URL = "https://api.census.gov/data/2022/acs/acs5"
 CENSUS_VARIABLES_URL = "https://api.census.gov/data/2023/acs/acs1/variables.html"
 
-POPULATION_DATA_PATH = "data/population/"
-HOUSEHOLD_DATA_PATH = "data/household/"
+POPULATION_DATA_PATH = "zcta_data/population/"
+HOUSEHOLD_DATA_PATH = "zcta_data/household/"
 
 AGE_GROUP_MAPPING = {
     "adult_list": [

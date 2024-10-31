@@ -2,6 +2,8 @@ import json
 import os
 import pickle
 import re
+import argparse
+import math
 
 from enum import Enum
 from dataclasses import dataclass
@@ -53,9 +55,11 @@ class CensusGeographyHandler:
         params = {
             "get": "NAME," + ",".join(variables),
             "for": f"{config.type.value}:{geo_unit}",
-            "in": f"state:{config.fips}",
             "key": self.api_key
         }
+
+        if config.type == GeographyType.COUNTY:
+            params["in"] = f"state:{config.fips}"
         
         response = requests.get(self.base_url, params=params)
         response.raise_for_status()
@@ -64,13 +68,16 @@ class CensusGeographyHandler:
     def save_data(self, 
                   data: Dict, 
                   config: GeographyConfig, 
-                  geo_unit: str, 
+                  geo_path: str, 
+                  geo_unit: str,
                   data_type: str):
+
         """Save processed data to appropriate location"""
-        base_path = f"data/{data_type}/{config.state_abbr}"
+        base_path = f"{geo_path}/{data_type}/{config.state_abbr}" # ex. county_data/population/AL
         os.makedirs(base_path, exist_ok=True)
         
-        filename = f"{base_path}/{geo_unit}_{data_type}"
+        filename = f"{base_path}/{geo_unit}_{data_type}" # ex. county_data/population/AL/013_population.pkl
+
         if isinstance(data, pd.DataFrame):
             data.to_csv(f"{filename}.csv", index=False)
         else:
@@ -163,51 +170,6 @@ def parse_label(label):
     
     return gender, 'unknown'
 
-def process_age_gender_data(data, variable_labels, state_abbr):
-    """
-    Processes age and gender census data and transforms it into a structured DataFrame.
-
-    Args:
-        data (list): Census data in a list format.
-        variable_labels (dict): A dictionary mapping variable names to labels.
-        state_abbr (str): The state abbreviation.
-
-    Returns:
-        pd.DataFrame: A DataFrame containing processed age and gender data.
-    """
-    df = pd.DataFrame(data[1:], columns=data[0])
-    
-    region = state_abbr
-    area = region + '0001'
-    
-    transformed_data = {}
-    
-    for variable, value in df.iloc[0].items():
-        if variable in variable_labels:
-            label = variable_labels[variable]
-            gender, age = parse_label(label)
-            count = int(value)
-            
-            key = (area, gender, age, region)
-            if key[2] != 'unknown':
-                if (key[2] == '20' or key[2] == '21'):
-                    key = (area, gender, '20t21', region)
-                if key not in transformed_data:
-                    transformed_data[key] = 0
-                transformed_data[key] += count
-    
-    result = [
-        {
-            'area': area,
-            'gender': gender,
-            'age': age,
-            'count': count,
-            'region': region
-        }
-        for (area, gender, age, region), count in transformed_data.items()
-    ]
-    return pd.DataFrame(result)
-
 def get_counties(state_fips):
     """
     Fetches all counties for a specific state based on the state FIPS code.
@@ -254,8 +216,54 @@ def get_zctas(state_fips):
 
     state_zctas = [line.split(',')[-1][1:-1] for line in split_response[1:] if line.split(',')[-2] == f'"{state_fips}"']
     return state_zctas
+
+
+def process_age_gender_data(data, variable_labels, state_abbr):
+    """
+    Processes age and gender census data and transforms it into a structured DataFrame.
+
+    Args:
+        data (list): Census data in a list format.
+        variable_labels (dict): A dictionary mapping variable names to labels.
+        state_abbr (str): The state abbreviation.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing processed age and gender data.
+    """
+    df = pd.DataFrame(data[1:], columns=data[0])
     
-def process_ethnicity_data(data, labels, state_abbr):
+    region = state_abbr
+    area = region + '0001'
+    
+    transformed_data = {}
+    
+    for variable, value in df.iloc[0].items():
+        if variable in variable_labels:
+            label = variable_labels[variable]
+            gender, age = parse_label(label)
+            count = int(value)
+            
+            key = (area, gender, age, region)
+            if key[2] != 'unknown':
+                if (key[2] == '20' or key[2] == '21'):
+                    key = (area, gender, '20t21', region)
+                if key not in transformed_data:
+                    transformed_data[key] = 0
+                transformed_data[key] += count
+    
+    result = [
+        {
+            'area': area,
+            'gender': gender,
+            'age': age,
+            'count': count,
+            'region': region
+        }
+        for (area, gender, age, region), count in transformed_data.items()
+    ]
+    return pd.DataFrame(result)
+    
+def process_ethnicity_data(data, labels, state_abbr, geography_type):
     """
     Processes ethnicity census data and transforms it into a structured DataFrame.
 
@@ -268,7 +276,7 @@ def process_ethnicity_data(data, labels, state_abbr):
         pd.DataFrame: A DataFrame containing processed ethnicity data.
     """
     df = pd.DataFrame(data[1:], columns=data[0])
-    id_vars = ['NAME', 'county']
+    id_vars = ['NAME', geography_type]
     value_vars = list(labels.keys())
     melted_df = df.melt(id_vars=id_vars, value_vars=value_vars, var_name='variable', value_name='count')
     
@@ -282,16 +290,70 @@ def process_ethnicity_data(data, labels, state_abbr):
     
     return result_df
 
+def get_state_batch(batch_number, batch_size=10):
+    """
+    Get the states for a specific batch number.
+    States are sorted alphabetically by abbreviation before batching.
+    """
+    # Sort states by abbreviation
+    sorted_states = sorted(STATE_DICT.items(), key=lambda x: x[1][1])  # Sort by state abbreviation
+    
+    # Calculate batch indices
+    start_idx = (batch_number - 1) * batch_size
+    end_idx = start_idx + batch_size
+    
+    # Get states for this batch
+    batch_states = dict(sorted_states[start_idx:end_idx])
+    
+    if not batch_states:
+        total_batches = math.ceil(len(STATE_DICT) / batch_size)
+        raise ValueError(f"Invalid batch number. Please choose a batch between 1 and {total_batches}")
+    
+    return batch_states
+
+def parse_arguments():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description='Census Geography Data Handler')
+    
+    # Add mutually exclusive group for batch or state
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument(
+        '--batch',
+        type=int,
+        help='Batch number to process (1-6, each batch contains 10 states)'
+    )
+    group.add_argument(
+        '--state',
+        type=str,
+        help='Process specific state (use state abbreviation, e.g., CA)'
+    )
+    
+    return parser.parse_args()
+
 def main():
     handler = CensusGeographyHandler(API_KEY, CENSUS_API_URL)
     
-    geography_type = GeographyType.ZCTA 
+    geography_type = GeographyType.ZCTA
     
     html_content = fetch_url(CENSUS_VARIABLES_URL)
     ag_vars, ag_labels = get_age_gender_labels(html_content)
     e_vars, e_labels = get_ethnicity_labels()
     
-    for state_fips, (state_name, state_abbr) in STATE_DICT.items():
+    args = parse_arguments()
+    
+    # Determine which states to process
+    if args.batch:
+        states_to_process = get_state_batch(args.batch)
+        print(f"Processing batch {args.batch} states: {', '.join(state_abbr for _, (_, state_abbr) in states_to_process.items())}")
+    else:  # args.state
+        states_to_process = {
+            fips: (name, abbr) for fips, (name, abbr) in STATE_DICT.items()
+            if abbr == args.state.upper()
+        }
+        if not states_to_process:
+            raise ValueError(f"Invalid state abbreviation: {args.state}")
+    
+    for state_fips, (state_name, state_abbr) in states_to_process.items():
         # Create config
         config = GeographyConfig(
             type=geography_type,
@@ -310,7 +372,7 @@ def main():
                 
                 # Process data
                 ag_df = process_age_gender_data(ag_data, ag_labels, state_abbr)
-                e_df = process_ethnicity_data(e_data, e_labels, state_abbr)
+                e_df = process_ethnicity_data(e_data, e_labels, state_abbr, geography_type.value)
                 
                 # Combine data
                 pop_data = {
@@ -318,10 +380,14 @@ def main():
                     'ethnicity': e_df
                 }
                 
-                # Save data
-                geo_path = geo_unit + "data"
-                handler.save_data(ag_df, config, geo_path, 'age_gender')
-                handler.save_data(pop_data, config, geo_path, 'population')
+                # Set output directory
+                if (geography_type == GeographyType.ZCTA):
+                    geo_path = "zcta_data"
+                else:
+                    geo_path = "county_data"
+
+                handler.save_data(ag_df, config, geo_path, geo_unit, 'age_gender')
+                handler.save_data(pop_data, config, geo_path, geo_unit, 'population')
                 
                 print(f"Saved data for {config.type.value} {geo_unit}")
                 

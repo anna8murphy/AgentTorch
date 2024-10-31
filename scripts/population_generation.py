@@ -2,24 +2,25 @@ import numpy as np
 import pandas as pd
 import pickle
 import os
+import argparse
+from typing import List, Dict, Optional
 from agent_torch.data.census.census_loader import CensusDataLoader
 from constants import POPULATION_DATA_PATH, HOUSEHOLD_DATA_PATH, STATE_DICT, AGE_GROUP_MAPPING
+from pathlib import Path
+import logging
 
-def get_zctas(path):
-    zcta_list = []
-    
-    for filename in os.listdir(path):
-        if filename.endswith('.csv'):
-            zcta = filename.split('_')[0]
-            
-            if zcta not in zcta_list:
-                zcta_list.append(zcta)
-        
-    # includes state abbr
-    return zcta_list
+# Set up logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('census_processing.log'),
+        logging.StreamHandler()
+    ]
+)
 
-# bin ethnicities into "other" category
-def merge_ethnicities(path):
+def merge_ethnicities(path: str) -> None:
+    """Merge ethnicities into major categories"""
     with open(path, 'rb') as file:
         population_data = pickle.load(file)
     
@@ -41,37 +42,105 @@ def merge_ethnicities(path):
     with open(path, 'wb') as file:
         pickle.dump(population_data, file)
 
-state = "36"
-state_abbr = "NY"
-state_zctas = get_zctas("data/age_gender")
+def get_zctas(path: str) -> List[str]:
+    """Get list of unique ZCTAs from a directory"""
+    return list(set(
+        filename.split('_')[0] 
+        for filename in os.listdir(path) 
+        if filename.endswith('.pkl')
+    ))
 
-for zcta in state_zctas:
-    #### RUN ONCE:
-    # try:
-    #     filename = 'data/population/' + state_abbr + zcta + '_population_data.pkl'
-    #     merge_ethnicities(filename)
-    # except:
-    #     continue
+def process_state(state: str) -> None:
+    """Process all ZCTAs for a single state"""
+    try:
+        state_abbr = STATE_DICT[state][1]
+        logging.info(f"Processing state: {state} ({state_abbr})")
+        
+        # Get list of ZCTAs for this state
+        zcta_list = get_zctas(POPULATION_DATA_PATH + state_abbr)
+        logging.info(f"Found {len(zcta_list)} ZCTAs for {state}")
+        logging.info(POPULATION_DATA_PATH + state_abbr)
+        
+        # Process each ZCTA
+        for zcta in zcta_list:
+            try:
+                logging.info(f"Processing ZCTA: {zcta}")
+                
+                # Create output directories
+                Path(f"output/population/{state_abbr}").mkdir(parents=True, exist_ok=True)
+                Path(f"output/household/{state_abbr}").mkdir(parents=True, exist_ok=True)
+                
+                # Merge ethnicities
+                population_path = f'zcta_data/population/{state_abbr}/{zcta}_population.pkl'
+                merge_ethnicities(population_path)
+                
+                # Load data
+                household_data = pd.read_pickle(f"{HOUSEHOLD_DATA_PATH}/{state_abbr}/{zcta}_household.pkl")
+                base_population_data = pd.read_pickle(f"{POPULATION_DATA_PATH}/{state_abbr}/{zcta}_population.pkl")
+                
+                # Initialize CensusDataLoader (without parallelization)
+                census_data_loader = CensusDataLoader(n_cpu=1, use_parallel=False)
+                
+                # Generate base population
+                census_data_loader.generate_basepop(
+                    input_data=base_population_data,
+                    region=state_abbr,
+                    area_selector=None,
+                    save_path=f"output/population/{state_abbr}/{zcta}_base_population.pkl",
+                )
+                
+                # Generate household
+                census_data_loader.generate_household(
+                    household_data=household_data,
+                    household_mapping=AGE_GROUP_MAPPING,
+                    region=state_abbr,
+                    save_path=f"output/household/{state_abbr}/{zcta}_household.pkl"
+                )
+                
+                logging.info(f"Successfully processed ZCTA: {zcta}")
+                
+            except Exception as e:
+                logging.error(f"Error processing ZCTA {zcta}: {str(e)}")
+                continue
+                
+    except Exception as e:
+        logging.error(f"Error processing state {state}: {str(e)}")
 
-    state_abbr = STATE_DICT[state][1]
-    household_data = pd.read_pickle(HOUSEHOLD_DATA_PATH  + zcta + "_household.pkl")
-    base_population_data = pd.read_pickle(POPULATION_DATA_PATH + zcta + "_population_data.pkl")
+def get_state_batch(batch_number: int) -> List[str]:
+    """Get the list of states for a given batch number"""
+    all_states = list(STATE_DICT.keys())
+    total_states = len(all_states)
+    states_per_batch = (total_states + 9) // 10  # Ceiling division to distribute states evenly
+    
+    start_idx = (batch_number - 1) * states_per_batch
+    end_idx = min(start_idx + states_per_batch, total_states)
+    
+    return all_states[start_idx:end_idx]
 
-    area_selector = None
-    geo_mapping = None
+def main():
+    # Set up argument parser
+    parser = argparse.ArgumentParser(description='Process census data for a batch of states')
+    parser.add_argument('batch', type=int, help='Batch number (1-10)')
+    args = parser.parse_args()
+    
+    # Validate batch number
+    if args.batch < 1 or args.batch > 10:
+        raise ValueError("Batch number must be between 1 and 10")
+    
+    # Get states for this batch
+    states_to_process = get_state_batch(args.batch)
+    
+    logging.info(f"Processing batch {args.batch}")
+    logging.info(f"States in this batch: {states_to_process}")
+    
+    # Process each state in the batch
+    for state in states_to_process:
+        process_state(state)
+        logging.info(f"Completed processing state: {state}")
 
-    census_data_loader = CensusDataLoader(n_cpu=8, use_parallel=True)
-
-    census_data_loader.generate_basepop(
-        input_data=base_population_data,
-        region=state_abbr,
-        area_selector=area_selector,
-        save_path=f"output/population/{zcta}_base_population.pkl",
-    )
-
-    census_data_loader.generate_household(
-        household_data=household_data,
-        household_mapping=AGE_GROUP_MAPPING,
-        region=state_abbr,
-        save_path=f"output/household/{zcta}_household.pkl"
-    )
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:
+        logging.error(f"Fatal error: {str(e)}")
+        raise
