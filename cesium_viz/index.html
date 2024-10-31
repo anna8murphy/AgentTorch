@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Population Data Globe</title>
+    
+    <!-- CesiumJS and styles -->
+    <link rel="stylesheet" href="https://cesium.com/downloads/cesiumjs/releases/1.93/Build/Cesium/Widgets/widgets.css" />
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.93/Build/Cesium/Cesium.js"></script>
+    
+    <!-- Papa Parse for CSV parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    
+    <!-- Turf.js for geometric operations -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
+    
+    <script>
+        Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiJlZjYwODM5Yi01ODI5LTRiOTEtYTRjNS1jODk0OGJlNDlmYTkiLCJpZCI6MjUyMDU3LCJpYXQiOjE3MzAzOTg5MTd9.J6C-Ypube8m_VKhh7Xk6wO97nmN9TqLn31r9bBocPvQ';
+
+        let viewer;
+        let zcta_boundary;
+        let boundaryPolygon;
+
+        function initializeCesium() {
+            viewer = new Cesium.Viewer('cesiumContainer', {
+                terrainProvider: Cesium.createWorldTerrain(),
+                imageryProvider: new Cesium.IonImageryProvider({ assetId: 3 })
+            });
+        }
+
+        function cartesianToLonLat(cartesian) {
+            const cartographic = Cesium.Cartographic.fromCartesian(cartesian);
+            return {
+                lon: Cesium.Math.toDegrees(cartographic.longitude),
+                lat: Cesium.Math.toDegrees(cartographic.latitude)
+            };
+        }
+
+        function convertBoundaryToGeoJSON(positions) {
+            const coordinates = positions.map(pos => {
+                const lonLat = cartesianToLonLat(pos);
+                return [lonLat.lon, lonLat.lat];
+            });
+            
+            // Close the polygon by adding the first point at the end
+            if (coordinates.length > 0 && 
+                (coordinates[0][0] !== coordinates[coordinates.length-1][0] || 
+                 coordinates[0][1] !== coordinates[coordinates.length-1][1])) {
+                coordinates.push(coordinates[0]);
+            }
+
+            return turf.polygon([coordinates]);
+        }
+
+        function getRandomPointInPolygon(polygon) {
+            const bbox = turf.bbox(polygon);
+            let point;
+            let tries = 0;
+            const maxTries = 1000;
+
+            do {
+                const lon = bbox[0] + Math.random() * (bbox[2] - bbox[0]);
+                const lat = bbox[1] + Math.random() * (bbox[3] - bbox[1]);
+                point = turf.point([lon, lat]);
+                tries++;
+
+                if (tries >= maxTries) {
+                    console.error('Failed to find point within polygon after', maxTries, 'attempts');
+                    return null;
+                }
+            } while (!turf.booleanPointInPolygon(point, polygon));
+
+            return point.geometry.coordinates;
+        }
+
+        async function loadKML() {
+            const kmlUrl = '08323_boundary.kml';
+            const kmlDataSource = new Cesium.KmlDataSource({
+                camera: viewer.camera,
+                canvas: viewer.scene.canvas
+            });
+
+            const styleOptions = {
+                strokeColor: Cesium.Color.ORANGE,
+                strokeWidth: 4,
+                fill: false
+            };
+
+            try {
+                const dataSource = await kmlDataSource.load(kmlUrl, styleOptions);
+                viewer.dataSources.add(dataSource);
+                
+                zcta_boundary = dataSource.entities.values[0];
+                
+                if (zcta_boundary.polygon) {
+                    zcta_boundary.polygon.fill = false;
+                    zcta_boundary.polygon.outline = true;
+                    zcta_boundary.polygon.outlineColor = Cesium.Color.ORANGE;
+                    zcta_boundary.polygon.outlineWidth = 5;
+
+                    // Convert boundary to GeoJSON for Turf.js
+                    const positions = zcta_boundary.polygon.hierarchy.getValue().positions;
+                    boundaryPolygon = convertBoundaryToGeoJSON(positions);
+                }
+
+                viewer.zoomTo(dataSource);
+                await loadAndPlotData();
+                
+            } catch (error) {
+                console.error('Error loading KML:', error);
+            }
+        }
+
+        async function loadAndPlotData() {
+            try {
+                const response = await fetch('./08323_base_population_example.csv');
+                const csvData = await response.text();
+                const data = Papa.parse(csvData, { header: true }).data;
+
+                if (!boundaryPolygon) {
+                    console.error('ZCTA boundary not converted properly');
+                    return;
+                }
+
+                data.forEach(row => {
+                    const coordinates = getRandomPointInPolygon(boundaryPolygon);
+                    if (coordinates) {
+                        viewer.entities.add({
+                            position: Cesium.Cartesian3.fromDegrees(coordinates[0], coordinates[1]),
+                            point: {
+                                pixelSize: 5,
+                                color: Cesium.Color.WHITE,
+                                outlineColor: Cesium.Color.WHITE,
+                                outlineWidth: 2
+                            }
+                        });
+                    }
+                });
+
+            } catch (error) {
+                console.error('Error loading and plotting data:', error);
+            }
+        }
+
+        window.onload = () => {
+            initializeCesium();
+            loadKML();
+        };
+    </script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+
+        #cesiumContainer {
+            width: 100%;
+            height: 600px;
+            display: block;
+        }
+
+        h1 {
+            text-align: center;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>3D Globe of Population Data by ZCTA</h1>
+    <div id="cesiumContainer"></div>
+</body>
+</html>
