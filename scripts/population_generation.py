@@ -138,9 +138,17 @@ def main():
         process_state(state)
         logging.info(f"Completed processing state: {state}")
 
+def debug():
+    for batch in range(1, 10):
+        states_to_process = get_state_batch(batch)
+        # convert number to state abbrev
+        states_to_process = [STATE_DICT[state][1] for state in states_to_process]
+        print(f"Batch {batch}: {states_to_process}")
+
 if __name__ == "__main__":
     try:
         main()
+        # debug()
     except Exception as e:
         logging.error(f"Fatal error: {str(e)}")
         raise

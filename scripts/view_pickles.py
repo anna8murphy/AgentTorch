@@ -38,8 +38,8 @@ def print_first_rows(csv_file, num_rows=10):
         print(f"Error printing first rows of CSV: {e}")
 
 # view_pickle("zcta_data/population/AK/99929_population.pkl")
-view_pickle("zcta_data/population/NJ/08323_population.pkl")
-# view_pickle("output/population/NJ/08323_base_population.pkl")
+# view_pickle("zcta_data/population/NJ/08323_population.pkl")
+view_pickle("output/population/NJ/08323_base_population.pkl")
 # convert_pkl_to_csv("output/population/NJ/08323_base_population.pkl", "scripts/08323_base_population.csv")
 # convert_pkl_to_csv("zcta_data/population/NJ/08323_population.pkl", "scripts/08323_population.csv")
 
