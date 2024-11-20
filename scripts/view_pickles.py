@@ -1,5 +1,6 @@
 import pickle
 import pandas as pd
+from constants import STATE_DICT
 
 def view_pickle(file_path):
     try:
@@ -37,11 +38,21 @@ def print_first_rows(csv_file, num_rows=10):
     except Exception as e:
         print(f"Error printing first rows of CSV: {e}")
 
-# view_pickle("zcta_data/population/AK/99929_population.pkl")
-# view_pickle("zcta_data/population/NJ/08323_population.pkl")
-view_pickle("output/population/NJ/08323_base_population.pkl")
-# convert_pkl_to_csv("output/population/NJ/08323_base_population.pkl", "scripts/08323_base_population.csv")
-# convert_pkl_to_csv("zcta_data/population/NJ/08323_population.pkl", "scripts/08323_population.csv")
+def get_num_files(folder_path):
+    import os
+    return len([name for name in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, name))])
+
+view_pickle("zcta_data/population/GA/30258_population.pkl")
+# view_pickle("output/household/NJ/08323_household.pkl")
+# view_pickle("zcta_data/household/NJ/08323_household.pkl")
+
+# sanity check all zctas were processed (expected = ~33k)
+# res = 0
+# for state_fp in STATE_DICT:
+#     state_abbr = STATE_DICT[state_fp][1]
+#     res += get_num_files(f"county_data/population/{state_abbr}/")
+# print(res)
+
 
 
 

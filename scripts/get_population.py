@@ -373,7 +373,7 @@ def main():
                 # Process data
                 ag_df = process_age_gender_data(ag_data, ag_labels, state_abbr)
                 e_df = process_ethnicity_data(e_data, e_labels, state_abbr, geography_type.value)
-                
+
                 # Combine data
                 pop_data = {
                     'age_gender': ag_df,

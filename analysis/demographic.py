@@ -6,7 +6,6 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pingouin as pg
 
-
 def load_data(synthetic_pop, real_pop):
     with open(synthetic_pop, 'rb') as file:
         synthetic_data = pickle.load(file)
@@ -30,6 +29,7 @@ def load_data(synthetic_pop, real_pop):
     synthetic = age_gender_counts
     synthetic['age_numeric'] = synthetic['age'].map(age_mapping)
     
+    # print(real_data)
     real = real_data['age_gender']
     real['age_numeric'] = real['age'].map(age_mapping)
     
@@ -40,9 +40,24 @@ def compare_median_age(synthetic, real):
         "synthetic": synthetic.groupby('gender')['age_numeric'].median(),
         "real": real.groupby('gender')['age_numeric'].median()
     })
+
+    median_age_dict = {
+        "synthetic_male": median_age_df.loc['male', 'synthetic'] if 'male' in median_age_df.index else None,
+        "synthetic_female": median_age_df.loc['female', 'synthetic'] if 'female' in median_age_df.index else None,
+        "real_male": median_age_df.loc['male', 'real'] if 'male' in median_age_df.index else None,
+        "real_female": median_age_df.loc['female', 'real'] if 'female' in median_age_df.index else None
+    }
+
+    return median_age_dict
     
-    print("median age by gender:")
-    print(median_age_df)
+    # print("median age by gender:")
+    # print(median_age_df)
+
+def get_total_pop(synthetic, real):
+    total_synthetic = synthetic['count'].sum()
+    total_real = real['count'].sum()
+
+    return total_synthetic, total_real
 
 def visualize_age_distributions(synthetic, real):
     fig, axes = plt.subplots(1, 2, figsize=(12, 6))
@@ -61,38 +76,45 @@ def visualize_age_distributions(synthetic, real):
     plt.savefig("age_distributions.png")
 
 def chi_square_test(synthetic, real):
+    # relationship of age-gender distribution within each dataset
     synthetic_gender_age_table = pd.crosstab(synthetic['gender'], synthetic['age'])
     real_gender_age_table = pd.crosstab(real['gender'], real['age'])
     
     chi2_synthetic, p_synthetic, dof_synthetic, expected_synthetic = stats.chi2_contingency(synthetic_gender_age_table)
     chi2_real, p_real, dof_real, expected_real = stats.chi2_contingency(real_gender_age_table)
+
+    return chi2_synthetic, p_synthetic, chi2_real, p_real
     
-    print("\nchi-square for synthetic data:")
-    print(f"chi2: {chi2_synthetic}, p-value: {p_synthetic}")
+    # print("\nchi-square for synthetic data:")
+    # print(f"chi2: {chi2_synthetic}, p-value: {p_synthetic}")
     
-    print("\nchi-square for real data:")
-    print(f"chi2: {chi2_real}, p-value: {p_real}")
+    # print("\nchi-square for real data:")
+    # print(f"chi2: {chi2_real}, p-value: {p_real}")
 
 def mann_whitney_u_test(synthetic, real):
+    # checks if age distributions are the same for each gender
     real_male_ages = np.repeat(real.loc[real['gender'] == 'male', 'age_numeric'], real.loc[real['gender'] == 'male', 'count'])
     real_female_ages = np.repeat(real.loc[real['gender'] == 'female', 'age_numeric'], real.loc[real['gender'] == 'female', 'count'])
     
     synthetic_male_ages = np.repeat(synthetic.loc[synthetic['gender'] == 'male', 'age_numeric'], synthetic.loc[synthetic['gender'] == 'male', 'count'])
     synthetic_female_ages = np.repeat(synthetic.loc[synthetic['gender'] == 'female', 'age_numeric'], synthetic.loc[synthetic['gender'] == 'female', 'count'])
 
-    print("\nmann whitney u test (males):")
-    u_statistic, p_value = stats.mannwhitneyu(real_male_ages, synthetic_male_ages, nan_policy='omit')
-    print(f"u-statistic: {u_statistic}", "n1*n2=", len(real_male_ages)*len(synthetic_male_ages))
-    print(f"p-value: {p_value}")
+    # print("\nmann whitney u test (males):")
+    u_statistic_m, p_value_m = stats.mannwhitneyu(real_male_ages, synthetic_male_ages, nan_policy='omit')
+    # print(f"u-statistic: {u_statistic}", "n1*n2=", len(real_male_ages)*len(synthetic_male_ages))
+    # print(f"p-value: {p_value}")
     
-    print("\nmann whitney u test (females):")
-    u_statistic, p_value = stats.mannwhitneyu(real_female_ages, synthetic_female_ages, nan_policy='omit')
-    print(f"u-statistic: {u_statistic}", "n1*n2=", len(real_female_ages)*len(synthetic_female_ages))
-    print(f"p-value: {p_value}")
+    # print("\nmann whitney u test (females):")
+    u_statistic_f, p_value_f = stats.mannwhitneyu(real_female_ages, synthetic_female_ages, nan_policy='omit')
+    # print(f"u-statistic: {u_statistic}", "n1*n2=", len(real_female_ages)*len(synthetic_female_ages))
+    # print(f"p-value: {p_value}")
+
+    return u_statistic_m, p_value_m, u_statistic_f, p_value_f
 
 def main():
 
     density = "sparse"
+    # density = "dense"
 
     if density == "sparse":
         synthetic_pop = 'output/population/RI/02873_base_population.pkl'
@@ -103,12 +125,14 @@ def main():
         real_pop = 'zcta_data/population/NY/10001_population.pkl'
     
     synthetic, real = load_data(synthetic_pop, real_pop)
-    print(density)
+    print(synthetic, real)
     
-    compare_median_age(synthetic, real)
-    visualize_age_distributions(synthetic, real)
-    chi_square_test(synthetic, real)
-    mann_whitney_u_test(synthetic, real) # sparse has higher p-val
+    # compare_median_age(synthetic, real)
+    # visualize_age_distributions(synthetic, real)
+    # chi_square_test(synthetic, real)
+    # mann_whitney_u_test(synthetic, real) 
+
+    # print(get_zctas("https://localistica.com/usa/zipcodes/most-populated-zipcodes/"))
 
 if __name__ == "__main__":
     main()
