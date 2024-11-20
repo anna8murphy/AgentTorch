@@ -44,11 +44,13 @@ def avg_adults_kids(households):
     return total_adults / total_households, total_kids / total_households
 
 def main():
-    synthetic_path = "output/household/NJ/08323_household.pkl"
-    real_path = "zcta_data/household/NJ/08323_household.pkl"
+    synthetic_path = "output/household/HI/96728_household.pkl"
+    real_path = "zcta_data/household/HI/96728_household.pkl"
     
     synthetic_data, real_data = load_house_data(synthetic_path, real_path)
     households = group_households(synthetic_data)
+    for house in households:
+        print(house, households[house])
     
     # print("average household size:", avg_household_size(households))
     # print("average adults per household, average kids per household:", avg_adults_kids(households))

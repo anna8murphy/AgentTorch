@@ -7,7 +7,9 @@ from bs4 import BeautifulSoup
 import pandas as pd
 import os
 import random
-import pickle
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
 
 def get_zctas(url):
     response = requests.get(url)
@@ -100,20 +102,75 @@ def get_random_zctas(base_path="zcta_data/population"):
 
     return res
 
+def plot_household_size(data):
+   states, synth_sizes, real_sizes = zip(*data)
+   
+   states = np.array(states)
+   synth_sizes = np.array(synth_sizes)
+   real_sizes = np.array(real_sizes)
+   
+   outlier_mask = synth_sizes > 10
+   outlier_states = states[outlier_mask]
+   outlier_synth = synth_sizes[outlier_mask]
+   outlier_real = real_sizes[outlier_mask]
+   
+   states = states[~outlier_mask]
+   synth_sizes = synth_sizes[~outlier_mask]
+   real_sizes = real_sizes[~outlier_mask]
+   
+   x = np.arange(len(states))
+   
+   plt.figure(figsize=(15, 7))
+   
+   plt.plot(x, synth_sizes, marker='o', linestyle='-', label='Synthetic Average', color='#4C72B0')
+   plt.plot(x, real_sizes, marker='o', linestyle='-', label='Real Average', color='#55A868')
+   
+   if len(outlier_states) > 0:
+       plt.figtext(0.02, 0.02, 
+                  f'Outliers removed for scale:\n' + 
+                  '\n'.join([f'{state}: Synth={synth:.1f}, Real={real:.1f}' 
+                            for state, synth, real in zip(outlier_states, outlier_synth, outlier_real)]),
+                  fontsize=10, ha='left', va='bottom')
+   
+   plt.title('Average Household Size by State: Synthetic vs Real', pad=20, fontsize=14)
+   plt.xlabel('State', fontsize=12)
+   plt.ylabel('Household Size', fontsize=12)
+   plt.grid(True, linestyle='--', alpha=0.7)
+   plt.legend(fontsize=10)
+   
+   plt.xticks(x, states, rotation=45, ha='right')
+   
+   plt.tight_layout()
+   
+   plt.savefig("household_plot", dpi=300, bbox_inches='tight')
+   
+   plt.close()
+
 def main():
     # dense = get_zctas("https://localistica.com/usa/zipcodes/most-populated-zipcodes/")
     # sparse = get_zctas("https://localistica.com/usa/zipcodes/least-populated-zipcodes/")
-    random = get_random_zctas()
-
-    # print(random)
-
+    # random = get_random_zctas()
+    
     # dense_aggregate = get_zcta_data(dense, "dense")
     # sparse_aggregate = get_zcta_data(sparse, "sparse")
-    random_aggregate = get_zcta_data(random, "random")
+    # random_aggregate = get_zcta_data(random, "random")
+
+    df = pd.read_csv("~/censusdata/AgentTorch_SyntheticPopulation/analysis/random_aggregate.csv")
+
+    state_averages = df.groupby('state').agg({
+    'synth_avg_size': 'mean',
+    'real_avg_size': 'mean'
+    }).reset_index()
+
+    result = list(zip(state_averages['state'], 
+                    state_averages['synth_avg_size'], 
+                    state_averages['real_avg_size']))
+
+    plot_household_size(result)
 
     # dense_aggregate.to_csv("dense_aggregate.csv", index=False)
     # sparse_aggregate.to_csv("sparse_aggregate.csv", index=False)
-    random_aggregate.to_csv("random_aggregate.csv", index=False)
+    # random_aggregate.to_csv("random_aggregate.csv", index=False)
 
 if __name__ == "__main__":  
     main()

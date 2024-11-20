@@ -59,21 +59,39 @@ def get_total_pop(synthetic, real):
 
     return total_synthetic, total_real
 
-def visualize_age_distributions(synthetic, real):
-    fig, axes = plt.subplots(1, 2, figsize=(12, 6))
+def visualize_age_distributions(synthetic_df, real_df):
+    # Sort by age_numeric to ensure correct ordering
+    synth_by_age = synthetic_df.sort_values('age_numeric')
+    real_by_age = real_df.sort_values('age_numeric')
     
-    axes[0].set_title("synthetic data age distribution")
-    synthetic.groupby('age_numeric')['count'].sum().sort_index().plot(kind='bar', ax=axes[0])
-    axes[0].set_xlabel("age")
-    axes[0].set_ylabel("count")
+    # Create the plot
+    plt.figure(figsize=(12, 6))
     
-    axes[1].set_title("real data age distribution")
-    real.groupby('age_numeric')['count'].sum().sort_index().plot(kind='bar', ax=axes[1])
-    axes[1].set_xlabel("age")
-    axes[1].set_ylabel("count")
+    # Plot both lines
+    plt.plot(synth_by_age['age'], synth_by_age['count'], 
+             marker='o', linestyle='-', label='Synthetic', color='#4C72B0')
+    plt.plot(real_by_age['age'], real_by_age['count'], 
+             marker='o', linestyle='-', label='Real', color='#55A868')
     
+    # Customize the plot
+    plt.title('Age Distribution Comparison', pad=20, fontsize=14)
+    plt.xlabel('Age Group', fontsize=12)
+    plt.ylabel('Count', fontsize=12)
+    plt.grid(True, linestyle='--', alpha=0.7)
+    plt.legend(fontsize=10)
+    
+    # Rotate x-axis labels for better readability
+    plt.xticks(rotation=45, ha='right')
+    
+    # Adjust layout to prevent label cutoff
     plt.tight_layout()
-    plt.savefig("age_distributions.png")
+    
+    # Save the plot
+    plt.savefig("sampled_age_plot", dpi=300, bbox_inches='tight')
+    
+    # Close the plot to free memory
+    plt.close()
+    
 
 def chi_square_test(synthetic, real):
     # relationship of age-gender distribution within each dataset
@@ -113,8 +131,8 @@ def mann_whitney_u_test(synthetic, real):
 
 def main():
 
-    density = "sparse"
-    # density = "dense"
+    # density = "sparse"
+    density = "dense"
 
     if density == "sparse":
         synthetic_pop = 'output/population/RI/02873_base_population.pkl'
@@ -125,7 +143,7 @@ def main():
         real_pop = 'zcta_data/population/NY/10001_population.pkl'
     
     synthetic, real = load_data(synthetic_pop, real_pop)
-    print(synthetic, real)
+    visualize_age_distributions(synthetic, real)
     
     # compare_median_age(synthetic, real)
     # visualize_age_distributions(synthetic, real)
