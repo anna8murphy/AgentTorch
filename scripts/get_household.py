@@ -86,7 +86,6 @@ def process_state(state_info):
             state_abbr=state_abbr
         )
     
-    # Ensure the output directory exists
     os.makedirs(f'zcta_data/household/{state_abbr}', exist_ok=True)
     
     zctas = get_zctas(state_fips)
@@ -122,18 +121,14 @@ def batch(iterable, size):
         yield batch
 
 def main():
-
-    # Get household labels and data
     variables, variable_labels = get_household_labels()
     
-    # Create list of state processing information
     state_process_info = [(state_fips, variables, variable_labels) 
                          for state_fips in STATE_DICT]
     
     # Process states in batches of 10
     with Pool() as pool:
         for state_batch in batch(state_process_info, 10):
-            # Process batch of states in parallel
             completed_states = pool.map(process_state, state_batch)
             print(f"Completed processing states: {', '.join(completed_states)}")
 

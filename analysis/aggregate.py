@@ -1,6 +1,6 @@
 from household import load_house_data, group_households, avg_household_size, avg_adults_kids
 from demographic import load_data, compare_median_age, chi_square_test, mann_whitney_u_test, get_total_pop
-from constants import STATE_DICT
+from constants import STATE_DICT, SAMPLE_ZCTAS
 
 import requests
 from bs4 import BeautifulSoup
@@ -12,6 +12,15 @@ import seaborn as sns
 import numpy as np
 
 def get_zctas(url):
+    """
+    Get ZCTAs from a URL.
+
+    Parameters:
+    url (str): URL to scrape ZCTAs from
+
+    Returns:
+    list of tuples: List of [zcta, state_abbr] tuples
+    """
     response = requests.get(url)
     response.raise_for_status() 
 
@@ -83,41 +92,17 @@ def get_zcta_data(zcta_lst, density):
 
     return pd.DataFrame(data)
 
-def get_random_zctas(base_path="zcta_data/population"):
-    '''
-    Get 2 random ZCTAs from each state. Returns list of [zcta, state_abbr].
-    '''
-    res = []
-    for state_code, (state_name, state_abbr) in STATE_DICT.items():
-        state_folder = os.path.join(base_path, state_abbr)
-        if not os.path.exists(state_folder):
-            print(f"Folder for {state_name} ({state_abbr}) not found.")
-            continue
-        
-        files = [[f, state_abbr] for f in os.listdir(state_folder) if f.endswith("_population.pkl")]
-        files_stripped = [[f.split("_")[0], state_abbr] for f, _ in files]
-        
-        random_files = random.sample(files_stripped, 2)
-        res.extend(random_files)
-
-    return res
-
 def plot_household_size(data):
+   """
+   Plot average household size by state for synthetic and real data.
+   """
    states, synth_sizes, real_sizes = zip(*data)
-   
-   states = np.array(states)
-   synth_sizes = np.array(synth_sizes)
-   real_sizes = np.array(real_sizes)
-   
+   states, synth_sizes, real_sizes = map(np.array, (states, synth_sizes, real_sizes))
+
    outlier_mask = synth_sizes > 10
-   outlier_states = states[outlier_mask]
-   outlier_synth = synth_sizes[outlier_mask]
-   outlier_real = real_sizes[outlier_mask]
-   
-   states = states[~outlier_mask]
-   synth_sizes = synth_sizes[~outlier_mask]
-   real_sizes = real_sizes[~outlier_mask]
-   
+   outlier_states, outlier_synth, outlier_real = states[outlier_mask], synth_sizes[outlier_mask], real_sizes[outlier_mask]
+   states, synth_sizes, real_sizes = states[~outlier_mask], synth_sizes[~outlier_mask], real_sizes[~outlier_mask]
+    
    x = np.arange(len(states))
    
    plt.figure(figsize=(15, 7))
@@ -141,22 +126,17 @@ def plot_household_size(data):
    plt.xticks(x, states, rotation=45, ha='right')
    
    plt.tight_layout()
-   
-   plt.savefig("household_plot", dpi=300, bbox_inches='tight')
-   
+   plt.savefig("analysis/household_plot", dpi=300, bbox_inches='tight')
    plt.close()
 
 def main():
-    # dense = get_zctas("https://localistica.com/usa/zipcodes/most-populated-zipcodes/")
-    # sparse = get_zctas("https://localistica.com/usa/zipcodes/least-populated-zipcodes/")
-    # random = get_random_zctas()
-    
-    # dense_aggregate = get_zcta_data(dense, "dense")
-    # sparse_aggregate = get_zcta_data(sparse, "sparse")
-    # random_aggregate = get_zcta_data(random, "random")
+    # sample_aggregate = get_zcta_data(SAMPLE_ZCTAS, "random")
+    # sample_aggregate.to_csv("analysis/sample_aggregate.csv", index=False)
 
-    df = pd.read_csv("~/censusdata/AgentTorch_SyntheticPopulation/analysis/random_aggregate.csv")
+    # two ZCTAs from each state
+    df = pd.read_csv("~/censusdata/AgentTorch_SyntheticPopulation/analysis/sample_aggregate.csv") 
 
+    # group by state and calculate average household size
     state_averages = df.groupby('state').agg({
     'synth_avg_size': 'mean',
     'real_avg_size': 'mean'
@@ -167,10 +147,6 @@ def main():
                     state_averages['real_avg_size']))
 
     plot_household_size(result)
-
-    # dense_aggregate.to_csv("dense_aggregate.csv", index=False)
-    # sparse_aggregate.to_csv("sparse_aggregate.csv", index=False)
-    # random_aggregate.to_csv("random_aggregate.csv", index=False)
 
 if __name__ == "__main__":  
     main()

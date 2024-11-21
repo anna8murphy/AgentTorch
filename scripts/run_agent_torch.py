@@ -50,8 +50,10 @@ def get_zctas(path: str) -> List[str]:
         if filename.endswith('.pkl')
     ))
 
-def process_state(state: str) -> None:
+def process_state(state: str, test=False) -> None:
     """Process all ZCTAs for a single state"""
+    out_path = "test" if test else "output"
+
     try:
         state_abbr = STATE_DICT[state][1]
         logging.info(f"Processing state: {state} ({state_abbr})")
@@ -67,8 +69,8 @@ def process_state(state: str) -> None:
                 logging.info(f"Processing ZCTA: {zcta}")
                 
                 # Create output directories
-                Path(f"output/population/{state_abbr}").mkdir(parents=True, exist_ok=True)
-                Path(f"output/household/{state_abbr}").mkdir(parents=True, exist_ok=True)
+                Path(f"{out_path}/population/{state_abbr}").mkdir(parents=True, exist_ok=True)
+                Path(f"{out_path}/household/{state_abbr}").mkdir(parents=True, exist_ok=True)
                 
                 # Merge ethnicities
                 population_path = f'zcta_data/population/{state_abbr}/{zcta}_population.pkl'
@@ -86,7 +88,7 @@ def process_state(state: str) -> None:
                     input_data=base_population_data,
                     region=state_abbr,
                     area_selector=None,
-                    save_path=f"output/population/{state_abbr}/{zcta}_base_population.pkl",
+                    save_path=f"{out_path}/population/{state_abbr}/{zcta}_base_population.pkl",
                 )
                 
                 # Generate household
@@ -94,7 +96,7 @@ def process_state(state: str) -> None:
                     household_data=household_data,
                     household_mapping=AGE_GROUP_MAPPING,
                     region=state_abbr,
-                    save_path=f"output/household/{state_abbr}/{zcta}_household.pkl"
+                    save_path=f"{out_path}/household/{state_abbr}/{zcta}_household.pkl"
                 )
                 
                 logging.info(f"Successfully processed ZCTA: {zcta}")
@@ -119,31 +121,38 @@ def get_state_batch(batch_number: int) -> List[str]:
 
 def main():
     # Set up argument parser
-    parser = argparse.ArgumentParser(description='Process census data for a batch of states')
-    parser.add_argument('batch', type=int, help='Batch number (1-10)')
+    parser = argparse.ArgumentParser(description='Process census data for a batch of states or a single state')
+    group = parser.add_mutually_exclusive_group(required=True)
+    
+    group.add_argument('--batch', type=int, help='Batch number (1-10)')
+    group.add_argument('--state', type=str, help='State FIPS to process')
     args = parser.parse_args()
     
-    # Validate batch number
-    if args.batch < 1 or args.batch > 10:
-        raise ValueError("Batch number must be between 1 and 10")
-    
-    # Get states for this batch
-    states_to_process = get_state_batch(args.batch)
-    
-    logging.info(f"Processing batch {args.batch}")
-    logging.info(f"States in this batch: {states_to_process}")
-    
-    # Process each state in the batch
-    for state in states_to_process:
-        process_state(state)
-        logging.info(f"Completed processing state: {state}")
+    if args.batch:
+            # Validate batch number
+            if args.batch < 1 or args.batch > 10:
+                raise ValueError("Batch number must be between 1 and 10")
+            
+            # Get states for this batch
+            states_to_process = get_state_batch(args.batch)
+            
+            logging.info(f"Processing batch {args.batch}")
+            logging.info(f"States in this batch: {states_to_process}")
+            
+            # Process each state in the batch
+            for state in states_to_process:
+                process_state(state)
+                logging.info(f"Completed processing state: {state}")
+
+    elif args.state:
+        state_FIPS = args.state
+
+        # Process the state
+        process_state(state_FIPS)
+        logging.info(f"Completed processing state: {STATE_DICT[state_FIPS][0]}")
 
 def debug():
-    for batch in range(1, 10):
-        states_to_process = get_state_batch(batch)
-        # convert number to state abbrev
-        states_to_process = [STATE_DICT[state][1] for state in states_to_process]
-        print(f"Batch {batch}: {states_to_process}")
+    pass
 
 if __name__ == "__main__":
     try:

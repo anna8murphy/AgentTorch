@@ -42,16 +42,12 @@ def get_num_files(folder_path):
     import os
     return len([name for name in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, name))])
 
-view_pickle("zcta_data/population/GA/30258_population.pkl")
+view_pickle("zcta_data/population/TX/75025_population.pkl")
 # view_pickle("output/household/NJ/08323_household.pkl")
-# view_pickle("zcta_data/household/NJ/08323_household.pkl")
+# view_pickle("zcta_data/household/RI/02809_household.pkl")
+# view_pickle("test/household/RI/02809_household.pkl")
+# view_pickle("output/population/RI/02809_base_population.pkl")
 
-# sanity check all zctas were processed (expected = ~33k)
-# res = 0
-# for state_fp in STATE_DICT:
-#     state_abbr = STATE_DICT[state_fp][1]
-#     res += get_num_files(f"county_data/population/{state_abbr}/")
-# print(res)
 
 
 
