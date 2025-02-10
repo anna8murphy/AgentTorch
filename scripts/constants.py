@@ -4,7 +4,8 @@ CENSUS_API_URL = "https://api.census.gov/data/2022/acs/acs5"
 CENSUS_VARIABLES_URL = "https://api.census.gov/data/2023/acs/acs1/variables.html"
 
 POPULATION_DATA_PATH = "zcta_data/population/"
-HOUSEHOLD_DATA_PATH = "zcta_data/household/"
+# HOUSEHOLD_DATA_PATH = "zcta_data/household/" # without "living alone"
+HOUSEHOLD_DATA_PATH = "zcta_data/household_v2/" # with "living alone"
 
 AGE_GROUP_MAPPING = {
     "adult_list": [

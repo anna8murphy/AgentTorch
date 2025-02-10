@@ -20,7 +20,8 @@ def get_household_labels():
         "B11001_001E": "Households",
         "B11001_002E": "Family Households",
         "B11001_007E": "Nonfamily Households",
-        "B25010_001E": "Average Household Size"
+        "B25010_001E": "Average Household Size",
+        "B09021_002E": "Living Alone",
     }
 
     return list(variable_labels.keys()), variable_labels
@@ -55,6 +56,8 @@ def process_household_data(data, labels, state_abbr, zcta):
             h_data['nonfamily_households'] = int(value)
         elif label == 'Average Household Size':
             h_data['average_household_size'] = value
+        elif label == 'Living Alone':
+            h_data['living_alone'] = int(value)
     
     age_gender_df = pd.read_csv(f'zcta_data/age_gender/{state_abbr}/{zcta}_age_gender.csv')
    
@@ -86,7 +89,7 @@ def process_state(state_info):
             state_abbr=state_abbr
         )
     
-    os.makedirs(f'zcta_data/household/{state_abbr}', exist_ok=True)
+    os.makedirs(f'zcta_data/household_v2/{state_abbr}', exist_ok=True)
     
     zctas = get_zctas(state_fips)
     
@@ -94,8 +97,8 @@ def process_state(state_info):
         try:
             data = geography_handler.fetch_census_data(variables, config, zcta)
             h_df = process_household_data(data, variable_labels, state_abbr, zcta)
-            print(h_df)
-            h_df.to_pickle(f'zcta_data/household/{state_abbr}/{zcta}_household.pkl')
+            # print(h_df)
+            h_df.to_pickle(f'zcta_data/household_v2/{state_abbr}/{zcta}_household.pkl')
         except Exception as e:
             print(f"Failed processing {state_abbr} - {zcta}: {str(e)}")
             continue

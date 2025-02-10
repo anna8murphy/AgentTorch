@@ -132,6 +132,7 @@ def mann_whitney_u_test(synthetic, real):
 
     return u_stat_m, p_val_m, u_stat_f, p_val_f
 
+
 def main():
 
     # density = "sparse"
@@ -144,8 +145,14 @@ def main():
     else: # dense
         synthetic_pop = 'output/population/NY/10001_base_population.pkl'
         real_pop = 'zcta_data/population/NY/10001_population.pkl'
+
+
+    synthetic_pop = 'output_v2/population/ME/04330_base_population.pkl'
+    real_pop = 'zcta_data/population/ME/04330_population.pkl'
     
     synthetic, real = load_data(synthetic_pop, real_pop)
+    # print(get_total_pop(synthetic, real))
+
     viz_age_distributions(synthetic, real)
     
     # print(compare_median_age(synthetic, real))

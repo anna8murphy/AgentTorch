@@ -52,7 +52,7 @@ def get_zctas(path: str) -> List[str]:
 
 def process_state(state: str, test=False) -> None:
     """Process all ZCTAs for a single state"""
-    out_path = "test" if test else "output"
+    out_path = "test" if test else "output_v2"
 
     try:
         state_abbr = STATE_DICT[state][1]
@@ -141,14 +141,14 @@ def main():
             
             # Process each state in the batch
             for state in states_to_process:
-                process_state(state)
+                process_state(state, test=False)
                 logging.info(f"Completed processing state: {state}")
 
     elif args.state:
         state_FIPS = args.state
 
         # Process the state
-        process_state(state_FIPS)
+        process_state(state_FIPS, test=False)
         logging.info(f"Completed processing state: {STATE_DICT[state_FIPS][0]}")
 
 def debug():

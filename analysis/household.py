@@ -45,7 +45,7 @@ def group_households(synthetic_data):
         
     return res
 
-def avg_household_size(households):
+def synth_avg_household_size(households):
     """
     Calculate the average household size.
 
@@ -60,6 +60,12 @@ def avg_household_size(households):
     if total_households == 0:
         return 0
     return total_people / total_households
+
+def real_avg_household_size(file_path):
+    with open(file_path, 'rb') as file:
+        data = pickle.load(file)
+        
+    return data["average_household_size"].iloc[0]
 
 def avg_adults_kids(households):
     """
@@ -79,17 +85,30 @@ def avg_adults_kids(households):
         return 0, 0
     return total_adults / total_households, total_kids / total_households
 
+def plot_household_size(old, new, real):
+    pass
+
+
 def main():
-    synthetic_path = "test/household/RI/02809_household.pkl"
-    real_path = "zcta_data/household/RI/02809_household.pkl"
+    synthetic_path = "test/household/ME/04330_household.pkl"
+    old_synthetic_path = "output/household/ME/04330_household.pkl"
+    real_path = "zcta_data/household_v2/ME/04330_household.pkl"
     
     synthetic_data, real_data = load_house_data(synthetic_path, real_path)
     households = group_households(synthetic_data)
 
+    old_synthetic_data, real_data = load_house_data(old_synthetic_path, real_path)
+    old_households = group_households(old_synthetic_data)
+
     # for house in households:
     #     print(house, households[house])
     
-    print("average household size:", avg_household_size(households))
-    
+    print("old average synth household size:", synth_avg_household_size(old_households))
+    print("new average synth household size:", synth_avg_household_size(households))
+    print("average real household size:", real_avg_household_size(real_path))
+
+    print("old average adults, kids:", avg_adults_kids(old_households))
+    print("new average adults, kids:", avg_adults_kids(households))
+
 if __name__ == "__main__":
     main()
